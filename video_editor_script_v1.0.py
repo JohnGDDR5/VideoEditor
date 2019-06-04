@@ -37,9 +37,10 @@ from math import pi, radians
 from mathutils import Matrix, Vector, Euler
 
 class StripOperators(bpy.types.Operator):
-    """Sets end frame to current frame"""
+    """Operators for  Strips on Sequence Editor"""
     bl_idname = "screen.strip_ops"
     bl_label = "Simple Object Operator"
+    bl_options = {'REGISTER', 'UNDO'}
     type = bpy.props.StringProperty(default="default")
     sub = bpy.props.StringProperty(default="default")
     #line = bpy.props.IntProperty(default=1, min=1)
@@ -60,12 +61,19 @@ class StripOperators(bpy.types.Operator):
         
         screen = bpy.context.screen
         sequence_editor = screen.scene.sequence_editor
-        
+        #bpy.context.screen.scene.sequence_editor.active_strip
         list = []
         
         if self.type == "reverse":
-            if self.sub == "strip":
+            if self.sub == "all":
                 #Checks if there is at least 1 marker
+                if len(markers) > 0:
+                    for i in enumerate(markers):
+                        i[1].select = True
+                else:
+                    print("No Markers in scene timeline")
+            elif self.sub == "strip":
+                #Checks if there is at least an active strip
                 if sequence_editor.active_strip is not None:
                     active = sequence_editor.active_strip
                     
@@ -101,30 +109,87 @@ class StripOperators(bpy.types.Operator):
                     print("Frame Start 3: "+str(active.frame_start))
                     
                     print("-------------End")
-                    
-                    
                 else:
                     print("No Active Strip")
-            elif self.sub == "all":
-                #Checks if there is at least 1 marker
-                if len(markers) > 0:
-                    for i in enumerate(markers):
-                        i[1].select = True
-                else:
-                    print("No Markers in scene timeline")
                     
         elif self.type == "deselect":
             if self.sub == "all":
                 pass
+        elif self.type == "move":
+            #if self.sub == "afterCurrent":
+            #Checks if there is at least an active strip
+            if sequence_editor.active_strip is not None:
+                active = sequence_editor.active_strip
+                
+                list = []
+                listStart = []
+                striplist = []
+                if self.sub == "afterCurrent":
+                    for i in enumerate(sequence_editor.sequences_all):
+                        if i[1].frame_final_start > frameC:
+                            list.append(i)
+                            #print("1: "+str(i[1]))
+                        else:
+                            pass
+                elif self.sub == "afterCurrentSelected":
+                    for i in enumerate(sequence_editor.sequences_all):
+                        if i[1].frame_final_start > frameC and i[1].select == True:
+                            list.append(i)
+                            #print("1: "+str(i[1]))
+                        else:
+                            pass
+                #Appends the frame each strip in "list" starts in    
+                for i in list:
+                    listStart.append(i[1].frame_final_start)
+                    
+                #Gets the minimum index appended to "list" variable
+                minimum = int(min(listStart))
+                #The ammount to subtract for every strip on the left of the current frame
+                sub = minimum-frameC#sequence_editor.sequences_all[minimum].frame_final_start-frameC
+                
+                for i in list:
+                    if i[1].frame_final_start > frameC:
+                        channel = i[1].channel
+                        i[1].frame_start -= sub#(i[1].frame_final_start-frameC)
+                        i[1].channel = channel
+                    else:
+                        pass
+            #pass
+            """elif self.sub == "afterCurrentActive":
+                #Checks if there is at least an active strip
+                if sequence_editor.active_strip is not None:
+                    active = sequence_editor.active_strip
+                    
+                    list = []
+                    
+                    for i in enumerate(sequence_editor.sequences_all):
+                        if i[1].frame_final_start > frameC and i[1].select == True:
+                            list.append(i[0])
+                        else:
+                            pass
+                    #Gets the minimum index appended to "list" variable
+                    minimum = int(min(list))
+                    #The ammount to subtract for every strip on the left of the current frame
+                    sub = sequence_editor.sequences_all[minimum].frame_final_start-frameC
+                    
+                    for i in enumerate(sequence_editor.sequences_all):
+                        if i[1].frame_final_start > frameC:
+                            channel = i[1].channel
+                            i[1].frame_start -= sub#(i[1].frame_final_start-frameC)
+                            i[1].channel = channel
+                        else:
+                            pass
+                pass"""
         else:
             print("Unrecognized .marker_ops's Type & Sub")
         
         return {'FINISHED'}
 
 class MarkerOperators(bpy.types.Operator):
-    """Sets end frame to current frame"""
+    """Operators for Markers in scene timeline"""
     bl_idname = "screen.marker_ops"
     bl_label = "Simple Object Operator"
+    bl_options = {'REGISTER', 'UNDO'}
     type = bpy.props.StringProperty(default="default")
     sub = bpy.props.StringProperty(default="default")
     #line = bpy.props.IntProperty(default=1, min=1)
@@ -184,11 +249,74 @@ class MarkerOperators(bpy.types.Operator):
         
         return {'FINISHED'}
     
+class MarkerToCurrent(bpy.types.Operator):
+    """Sets active and closest marker to current frame"""
+    bl_idname = "screen.marker_to_current"
+    bl_label = "Simple Object Operator"
+    bl_options = {'REGISTER', 'UNDO'}
+    
+    #Makes sure there is at least 1 strip selected in sequence editor
+    @classmethod
+    def poll(cls, context):
+        return len(bpy.context.scene.timeline_markers) > 0
+    
+    def execute(self, context):
+        
+        scene = bpy.context.scene
+        start = scene.frame_start
+        end = scene.frame_end
+        currentF = scene.frame_current
+        
+        markers = bpy.context.scene.timeline_markers
+        list = []
+        #List will have [0]=name, [1]=distance, [2]=boolean, [3]=index
+            
+        if len(markers) > 0:
+            print("Greater than 0")
+            print("CurrentF: " + str(currentF))
+            for j, i in enumerate(bpy.context.scene.timeline_markers):
+                
+                #Checks if a marker is selected
+                if i.select == True:
+                    print(str(i.name)+": "+str(i.frame) +" "+ str(i.select))
+                    #Gets the distance of the selected marker to current frame
+                    distance = i.frame - currentF
+                    list.append([i.name, distance, i.select, j])
+                    
+                    if i.frame >= currentF:
+                        break
+            
+            #Checks if there is more than one selected marker
+            if len(list) > 1:
+                #There will always only be one index after the current frame if there is one or more selected after the current frame
+                index = list[-1][3]
+                #Checks if last marker distance is greater or less than current frame
+                if list[-1][1] > 0:
+                    #Checks which marker distance is closer to the current frame
+                    if abs(list[-1][1]) < abs(list[-2][1]):
+                        scene.timeline_markers[index].frame = currentF
+                    else:
+                        scene.timeline_markers[list[-2][3]].frame = currentF
+                elif list[-1][1] < 0:
+                    scene.timeline_markers[index].frame = currentF
+            elif len(list) == 1:
+                
+                scene.timeline_markers[list[0][3]].frame = currentF
+            else:
+                print("No Markers Selected")
+                pass
+                
+        else:
+            print("select a marker")
+        
+        return {'FINISHED'}
+    
 class timelineAdd(bpy.types.Operator):
     """Adds frame number set of Frameint"""
     bl_idname = "time.timeline_add"
     bl_label = "Simple Object Operator"
     type = bpy.props.StringProperty(default="add")
+    bl_options = {'REGISTER', 'UNDO'}
     #timeline = bpy.props.StringProperty(default="start")
 
     def execute(self, context):
@@ -314,6 +442,18 @@ class CustomPanel(bpy.types.Panel):
         button.next = True
         button.center = True
         
+        #Moves All Strips After Current Frame to Current Frame
+        row = col.row(align=True)
+        button = row.operator("screen.strip_ops", text="Left Strips", icon="BACK")
+        button.type = "move"
+        button.sub = "afterCurrent"
+        
+        #Moves All Selected Strips After Current Frame to Current Frame
+        #row = col.row(align=True)
+        button = row.operator("screen.strip_ops", text="Active Strips", icon="BACK")
+        button.type = "move"
+        button.sub = "afterCurrentSelected"
+        
         #Markers
         row = col.row(align=True)
         row.label(text="Markers:")
@@ -336,6 +476,9 @@ class CustomPanel(bpy.types.Panel):
         button.type = "deselect"
         button.sub = "all"
         
+        row = col.row(align=True)
+        button = row.operator("screen.marker_to_current", text="Marker To Current", icon="MARKER_HLT")
+        
         #End of CustomPanel1
 
 # Register        
@@ -345,6 +488,7 @@ def register():
     ut.register_class(CustomPanel)
     ut.register_class(StripOperators)
     ut.register_class(MarkerOperators)
+    ut.register_class(MarkerToCurrent)
     ut.register_class(timelineAdd)
     #Note: register_manual_map isn't needed for an AddOn
     ut.register_manual_map(initSceneProperties)
@@ -358,6 +502,7 @@ def unregister():
     ut.unregister_class(CustomPanel)
     ut.unregister_class(StripOperators)
     ut.unregister_class(MarkerOperators)
+    ut.unregister_class(MarkerToCurrent)
     ut.unregister_class(timelineAdd)
     #Note: register_manual_map isn't needed for an AddOn
     ut.unregister_manual_map(initSceneProperties)

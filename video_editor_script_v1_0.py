@@ -18,49 +18,63 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 
+"""
 bl_info = {
-    "name": "RenderRig",
-    "description": "Generates a renderable rig with custom bones",
-    "author": "Juan Cardenas",
-    "version": (1, 0), #internal v1.24.6
-    "blender": (2, 79, 0),
+    "name": "Video Editor Script Tools",
+    "description": "Simple strip tools for Blender",
+    "author": "JohnGDDR5 (Juan Cardenas)",
+    "version": (1, 0, 0), 
+    "blender": (2, 80, 0),
     "location": "View3D > Tools > Rig",
-    "warning": "Runs very slowly on high density rigs.",
+    "warning": "Currently in development. Porting to Blender 2.8",
     "support": "COMMUNITY",
-    "category": "Rigging"
+    "category": "Sequencer Video Editing"
 }
+"""
 
 import bpy
         
-from bpy.props import *
+from bpy.props import * #Basically to allow the use of BoolProperty .etc
 from math import pi, radians
 from mathutils import Matrix, Vector, Euler
 
-class StripOperators(bpy.types.Operator):
+from operator import itemgetter, attrgetter
+
+class SEQUENCER_TOOLS_OT_strip_ops(bpy.types.Operator):
     """Operators for  Strips on Sequence Editor"""
-    bl_idname = "screen.strip_ops"
+    bl_idname = "sequencer_tools.strip_ops"
     bl_label = "Simple Object Operator"
     bl_options = {'REGISTER', 'UNDO'}
-    type = bpy.props.StringProperty(default="default")
-    sub = bpy.props.StringProperty(default="default")
+    type: bpy.props.StringProperty(default="default")
+    sub: bpy.props.StringProperty(default="default")
     #line = bpy.props.IntProperty(default=1, min=1)
     
     #Makes sure there is at least 1 strip selected in sequence editor
     @classmethod
     def poll(cls, context):
-        return bpy.context.screen.scene.sequence_editor.active_strip is not None
+        #return bpy.context.screen.scene.sequence_editor.active_strip is not None
+        return bpy.context.scene.sequence_editor.active_strip is not None
     
     def execute(self, context):
         
         scene = bpy.context.scene
         data = bpy.data
         
+        props = scene.SeqTools_Props
+        
         start = scene.frame_start
         end = scene.frame_end
         frameC = scene.frame_current
+        currentF = scene.frame_current
+        
+        markerScale = props.MarkerScale
+        inlcudeMarkers = props.MarkerInclude
+        markers = scene.timeline_markers
         
         screen = bpy.context.screen
-        sequence_editor = screen.scene.sequence_editor
+        #sequence_editor = screen.scene.sequence_editor
+        sequence_editor = scene.sequence_editor
+        
         #bpy.context.screen.scene.sequence_editor.active_strip
         list = []
         
@@ -123,7 +137,8 @@ class StripOperators(bpy.types.Operator):
                 
                 list = []
                 listStart = []
-                striplist = []
+                markerlist = []
+                #Sequence Editor Strips for loops
                 if self.sub == "afterCurrent":
                     for i in enumerate(sequence_editor.sequences_all):
                         if i[1].frame_final_start > frameC:
@@ -154,6 +169,19 @@ class StripOperators(bpy.types.Operator):
                         i[1].channel = channel
                     else:
                         pass
+                
+                if inlcudeMarkers == True:
+                    if self.sub == "afterCurrent":
+                        for i in enumerate(markers):
+                            if i[1].frame > currentF:
+                                i[1].frame -= sub
+                    elif self.sub == "afterCurrentSelected":
+                        for i in enumerate(markers):
+                            if i[1].frame > currentF:
+                                if i[1].select == True:
+                                    i[1].frame -= sub
+            """if self.sub == "all":
+                pass"""
             #pass
             """elif self.sub == "afterCurrentActive":
                 #Checks if there is at least an active strip
@@ -181,34 +209,44 @@ class StripOperators(bpy.types.Operator):
                             pass
                 pass"""
         else:
-            print("Unrecognized .marker_ops's Type & Sub")
+            print("Unrecognized .strip_ops's Type & Sub")
+            
+        self.type = "default"
+        self.sub = "default"
         
         return {'FINISHED'}
 
-class MarkerOperators(bpy.types.Operator):
+class SEQUENCER_TOOLS_OT_marker_ops(bpy.types.Operator):
     """Operators for Markers in scene timeline"""
-    bl_idname = "screen.marker_ops"
+    bl_idname = "sequencer_tools.marker_ops"
     bl_label = "Simple Object Operator"
     bl_options = {'REGISTER', 'UNDO'}
-    type = bpy.props.StringProperty(default="default")
-    sub = bpy.props.StringProperty(default="default")
+
+    type: bpy.props.StringProperty(default="default")
+    sub: bpy.props.StringProperty(default="default")
     #line = bpy.props.IntProperty(default=1, min=1)
     
     #Makes sure there is at least 1 strip selected in sequence editor
     @classmethod
     def poll(cls, context):
-        return len(bpy.context.scene.timeline_markers) > 0
+        #return len(bpy.context.scene.timeline_markers) > 0
+        return True
     
     def execute(self, context):
         
         scene = bpy.context.scene
         data = bpy.data
         
+        props = scene.SeqTools_Props
+        
         start = scene.frame_start
         end = scene.frame_end
         currentF = scene.frame_current
         
-        markers = bpy.context.scene.timeline_markers
+        markerScale = props.MarkerScale
+        markerInt = props.MarkerInt
+        
+        markers = scene.timeline_markers
         
         list = []
         
@@ -244,14 +282,146 @@ class MarkerOperators(bpy.types.Operator):
                         i[1].select = False
                 else:
                     print("No Markers in scene timeline")
+        elif self.type == "scale":
+            
+            #Checks if there is at least 1 marker
+            if len(markers) > 0:
+                #Allows for correct calculation
+                markerScale = (markerScale-1)*-1
+                
+                #When MarkerScale isn't 1 or 0
+                if props.MarkerScale != 1 and props.MarkerScale != 0:
+                    for i in enumerate(markers):
+                        if i[1].select == True:
+                            frameDifference = currentF - i[1].frame
+                            frameDifference *= markerScale
+                            i[1].frame += int(frameDifference)
+                elif props.MarkerScale == 0:
+                    for i in enumerate(markers):
+                        if i[1].select == True:
+                            i[1].frame = currentF
+                #No need to scale anything when they won't move at all
+                else:
+                    pass
+        #This doesn't work MLG
+        elif self.type == "active":
+            if self.sub == "next":
+                #Checks if there is at least 1 marker
+                if len(markers) > 0:
+                    #1st try
+                    """
+                    markerIndex = 0
+                    #Selects Next Marker
+                    for i in enumerate(markers):
+                        if i[1].select == True:
+                            markerIndex = i[0]
+                            break
+                        elif i[0] == len(markers)-1:
+                            pass
+                    
+                    #Deselects all markers
+                    for i in markers:
+                        i.select = False
+                    
+                    #Selects Next Marker
+                    if markerIndex != len(markers)-1:
+                        markers[markerIndex+1].select = True
+                    else:
+                        markers[0].select = True
+                    #break"""
+                    #2nd try
+                    """
+                    markerIndex = 0
+                    #indexList = []
+                    #Appends all selected marker frames to frameList
+                    frameList = []
+                    for i in enumerate(markers):
+                        if i[1].select == True:
+                            #indexList.append(i[0])
+                            frameList.append(i[1].frame)
+                    #Finds minimum frame to find the index 
+                    minimum = min(frameList)
+                    
+                    #Deselects all markers
+                    for i in markers:
+                        i.select = False
+                    #Find which marker is at the minimum frame
+                    for i in enumerate(markers):
+                        if i[1].frame == minimum:
+                            #Doesn't work since indexes aren't in range
+                            markers[i[0]+1].select = True
+                            #markerIndex = i[0]
+                            break
+                        elif i[0] == len(markers)-1:
+                            #markers[0].select = True
+                            pass
+                    """
+                    markerIndex = 0
+                    indexList = []
+                    #Appends all selected marker frames to frameList
+                    frameList = []
+                    for i in enumerate(markers):
+                        #if i[1].select == True:
+                        indexList.append(i[0])
+                        frameList.append(i[1].frame)
+                        #break
+                    #Finds minimum frame to find the index 
+                    #minimum = min(frameList)
+                    
+                    #Sorts the list
+                    sort = sorted(frameList)
+                    
+                    #Deselects all markers
+                    for i in markers:
+                        i.select = False
+                    #Find which marker is at the minimum frame
+                    """for i in enumerate(markers):
+                        if i[1].frame == minimum:
+                            #Doesn't work since indexes aren't in range
+                            markers[i[0]+1].select = True
+                            #markerIndex = i[0]
+                            break
+                        elif i[0] == len(markers)-1:
+                            #markers[0].select = True
+                            pass"""
+                    #Find which marker is at the minimum frame
+                    for i in indexList:
+                        print("I: "+str(i))
+                        if markers[i].frame == sort[0]:
+                            print("sort[0] : "+str(sort[0]))
+                            if i != len(markers)-1:
+                                print("indexList[i+1] : "+str(indexList[i+1]))
+                                #Doesn't work since indexes aren't in range
+                                markers[indexList[i+1]].select = True
+                                #markerIndex = i[0]
+                                break
+                            else:
+                                markers[0].select = True
+                        #elif i == len(markers)-1:
+                            #markers[0].select = True
+                            #pass
+                    
+                else:
+                    print("No Markers in scene timeline")
+                
+        elif self.type == "move":
+            if self.sub == "add":
+                for i in enumerate(markers):
+                    if i[1].select == True:
+                        i[1].frame += markerInt
+            elif self.sub == "sub":
+                for i in enumerate(markers):
+                    if i[1].select == True:
+                        i[1].frame -= markerInt
+            
         else:
             print("Unrecognized .marker_ops's Type & Sub")
         
         return {'FINISHED'}
     
-class MarkerToCurrent(bpy.types.Operator):
+class SEQUENCER_TOOLS_OT_marker_to_current(bpy.types.Operator):
     """Sets active and closest marker to current frame"""
-    bl_idname = "screen.marker_to_current"
+    bl_idname = "sequencer_tools.marker_to_current"
     bl_label = "Simple Object Operator"
     bl_options = {'REGISTER', 'UNDO'}
     
@@ -263,18 +433,21 @@ class MarkerToCurrent(bpy.types.Operator):
     def execute(self, context):
         
         scene = bpy.context.scene
+        
+        props = scene.SeqTools_Props
+        
         start = scene.frame_start
         end = scene.frame_end
         currentF = scene.frame_current
         
-        markers = bpy.context.scene.timeline_markers
+        markers = scene.timeline_markers
         list = []
         #List will have [0]=name, [1]=distance, [2]=boolean, [3]=index
             
         if len(markers) > 0:
             print("Greater than 0")
             print("CurrentF: " + str(currentF))
-            for j, i in enumerate(bpy.context.scene.timeline_markers):
+            for j, i in enumerate(scene.timeline_markers):
                 
                 #Checks if a marker is selected
                 if i.select == True:
@@ -311,11 +484,11 @@ class MarkerToCurrent(bpy.types.Operator):
         
         return {'FINISHED'}
     
-class timelineAdd(bpy.types.Operator):
+class SEQUENCER_TOOLS_OT_timeline_add(bpy.types.Operator):
     """Adds frame number set of Frameint"""
     bl_idname = "time.timeline_add"
     bl_label = "Simple Object Operator"
-    type = bpy.props.StringProperty(default="add")
+    type: bpy.props.StringProperty(default="add")
     bl_options = {'REGISTER', 'UNDO'}
     #timeline = bpy.props.StringProperty(default="start")
 
@@ -323,16 +496,18 @@ class timelineAdd(bpy.types.Operator):
         
         scene = bpy.context.scene
         
-        timelineInt = scene.TimelineInt[0]
-        if bpy.context.scene.TimelineBool == True:
-            timelineInt = scene.TimelineInt[1]
+        props = scene.SeqTools_Props
+        
+        timelineInt = props.TimelineInt[0]
+        if props.TimelineBool == True:
+            timelineInt = props.TimelineInt[1]
         #bool = scene.frameAddBool
         
-        frameCurrent = bpy.context.scene.frame_current
+        frameCurrent = scene.frame_current
         frameEnd = scene.frame_end
         frameStart = scene.frame_start
         
-        scene = bpy.context.scene
+        #scene = bpy.context.scene
         
         #Current Frame
         #if self.timeline == "current":
@@ -354,30 +529,60 @@ class PanelGroups(bpy.types.PropertyGroup):
     panelList = bpy.props.CollectionProperty(type=Panels)
     panelArmatures = bpy.props.CollectionProperty(type=PanelGroupArmatures)"""
 
+"""
 def initSceneProperties(scn):
     #Custom Variables created in Scene Custom Prop data on run
    
     mlg1 = bpy.types.Scene.LayerToggle = BoolProperty(name="Boolean", description="Shadow Samples Toggle Button", default=False)
     scn["LayerToggle"] = False
+    
     mlg2 = bpy.types.Scene.ScnLayersToggle = BoolVectorProperty(name="Boolean", description="Booleans if bone layers are on/off", size=32)
     scn["ScnLayersToggle"] = ([False]*32)
+    
     mlg3 = bpy.types.Scene.TimelineBool = BoolProperty(name="Boolean", description="Booleans if bone layers are on/off", default=False)
     scn["TimelineBool"] = False
-    """mlg4 = bpy.types.Scene.ActiveResButtons = IntVectorProperty(name = "IntVector", description = "X & Y Vector for Custom Resolution's Aspect Ratio", size=2, default=(0,0))
-    scn["ActiveResButtons"] = (0, 0)"""
+    
     mlg5 = bpy.types.Scene.TimelineInt = IntVectorProperty(name="IntVector", description="Add or Sub Current Frame", default= (24, 24) , min=0, size=2)
     scn["TimelineInt"] = (24, 24)
+    
+    mlg6 = bpy.types.Scene.MarkerScale = FloatProperty(name="Float", description="Scale location of selected markers", default= 1.0, min=0.0, soft_min=0.0, soft_max=5.0)
+    scn["MarkerScale"] = 24
+    
+    mlg7 = bpy.types.Scene.MarkerInclude = BoolProperty(name="Boolean", description="If you want to include markers when moving with screen.strip_ops", default=False)
+    scn["MarkerInclude"] = False
+    
+    mlg8 = bpy.types.Scene.MarkerInt = IntProperty(name="Int", description="Add or Sub Current Frame selected markers", default= 24, min=0)
+    scn["MarkerInt"] = 24
     
     return
 
 #Need This When its not run as an AddOn
 initSceneProperties(bpy.context.scene)
+"""
+
+class SEQUENCER_TOOLS_props(bpy.types.PropertyGroup):
+    #collections for custom Property Groups
+    LayerToggle: BoolProperty(name="Boolean", description="Shadow Samples Toggle Button", default=False)
+    
+    ScnLayersToggle: BoolVectorProperty(name="Boolean", description="Booleans if bone layers are on/off", size=32, default=([False]*32))
+    
+    TimelineBool: BoolProperty(name="Boolean", description="Booleans if bone layers are on/off", default=False)
+    
+    TimelineInt: IntVectorProperty(name="IntVector", description="Add or Sub Current Frame", default= (24, 24) , min=0, size=2)
+    
+    MarkerScale: FloatProperty(name="Float", description="Scale location of selected markers", default= 24.0, min=0.0, soft_min=0.0, soft_max=5.0)
+    
+    MarkerInclude: BoolProperty(name="Boolean", description="If you want to include markers when moving with screen.strip_ops", default=False)
+    
+    MarkerInt: IntProperty(name="Int", description="Add or Sub Current Frame selected markers", default= 24, min=0)
+    
+    # END
 
 # Menu UI Panel __________________________________________________
 
-class CustomPanel(bpy.types.Panel):
+class SEQUENCER_TOOLS_PT_custom_panel1(bpy.types.Panel):
     #A Custom Panel in Viewport
-    bl_idname = "StripEdit"
+    bl_idname = "SEQUENCER_TOOLS_PT_custom_panel1"
     bl_label = "Strip Edit"
     bl_space_type = 'SEQUENCE_EDITOR'
     bl_region_type = 'UI'
@@ -387,44 +592,65 @@ class CustomPanel(bpy.types.Panel):
     def draw(self, context):
                  
         layout = self.layout
+        
         scene = bpy.context.scene
         screen = bpy.context.screen
-        sequence_editor = bpy.context.screen.scene.sequence_editor
+        
+        props = scene.SeqTools_Props
+        
+        #New Stuff
+        #bpy.context.scene.sequence_editor.active_strip
+
+        #sequence_editor = screen.scene.sequence_editor
+        sequence_editor = scene.sequence_editor
+        currentF = scene.frame_current
         
         col = layout.column()
         #Current Frame
+        #row = col.row(align=True)
+        #row.label(text="Current Frame:")
+        
         row = col.row(align=True)
-        row.label(text="Current Frame:")
-        row = col.row(align=True)
-        button = row.operator("time.timeline_add", text="", icon="ZOOMIN")
-        button.type = "add"
-        button = row.operator("time.timeline_add", text="", icon="ZOOMOUT")
-        button.type = "sub"
-        if scene.TimelineBool == False:
-            row.prop(scene, "TimelineInt", index=0, text="Frame")
+        #if screen.scene.sequence_editor.active_strip is not None:
+        if scene.sequence_editor.active_strip is not None:
+            active_strip = sequence_editor.active_strip
+            
+            row.label(text="Strip Frames: "+str(active_strip.frame_final_duration))
+            row = col.row(align=True)
+            row.label(text="Start Frame: "+str(active_strip.frame_final_start))
+            row = col.row(align=True)
+            row.label(text="Current Frame Dif: "+str(active_strip.frame_final_start-currentF))
         else:
-            row.prop(scene, "TimelineInt", index=1, text="Frame")
-        row.prop(scene, "TimelineBool", text="", icon="PREVIEW_RANGE")
+            row.label(text="Strip Frames: No Active Strip")
+            row = col.row(align=True)
+            row.label(text="Start Frame: No Active Strip")
+            row = col.row(align=True)
+            row.label(text="Current Frame Dif: No Active Strip")
+        
+        row = col.row(align=True)
+        button = row.operator("time.timeline_add", text="", icon="ADD")
+        button.type = "add"
+        button = row.operator("time.timeline_add", text="", icon="REMOVE")
+        button.type = "sub"
+        if props.TimelineBool == False:
+            row.prop(props, "TimelineInt", index=0, text="Add Frame")
+        else:
+            row.prop(props, "TimelineInt", index=1, text="Add Frame")
+        row.prop(props, "TimelineBool", text="", icon="PREVIEW_RANGE")
         
         #Strip
         row = col.row(align=True)
         row.label(text="Strip:")
-        row = col.row(align=True)
-        if bpy.context.screen.scene.sequence_editor.active_strip is not None:
-            active_strip = sequence_editor.active_strip
-            row.label(text="Frame Length: "+str(active_strip.frame_final_duration))
-        else:
-            row.label(text="Frame Length: No Active Strip")
         
         #Reverse Strip    
         row = col.row(align=True)
         if sequence_editor.active_strip is not None:
             if sequence_editor.active_strip.use_reverse_frames == False:
-                button = row.operator("screen.strip_ops", text="Reverse Strip", icon="FILE_REFRESH")
+                button = row.operator("sequencer_tools.strip_ops", text="Reverse Strip", icon="FILE_REFRESH")
             else:
-                button = row.operator("screen.strip_ops", text="UnReverse Strip", icon="FILE_REFRESH")
+                button = row.operator("sequencer_tools.strip_ops", text="UnReverse Strip", icon="FILE_REFRESH")
         else:
-            button = row.operator("screen.strip_ops", text="Reverse Strip", icon="FILE_REFRESH")
+            button = row.operator("sequencer_tools.strip_ops", text="Reverse Strip", icon="FILE_REFRESH")
         button.type = "reverse"
         button.sub = "strip"
         
@@ -442,74 +668,132 @@ class CustomPanel(bpy.types.Panel):
         button.next = True
         button.center = True
         
+        row = col.row(align=True)
+        row.label(text="Move Strips:")
+        
         #Moves All Strips After Current Frame to Current Frame
         row = col.row(align=True)
-        button = row.operator("screen.strip_ops", text="Left Strips", icon="BACK")
+        button = row.operator("sequencer_tools.strip_ops", text="All Left", icon="BACK")
         button.type = "move"
         button.sub = "afterCurrent"
         
         #Moves All Selected Strips After Current Frame to Current Frame
         #row = col.row(align=True)
-        button = row.operator("screen.strip_ops", text="Active Strips", icon="BACK")
+        button = row.operator("sequencer_tools.strip_ops", text="Active", icon="BACK")
         button.type = "move"
         button.sub = "afterCurrentSelected"
+        
+        row.prop(props, "MarkerInclude", text="", icon="MARKER_HLT")
+        
+        #bpy.ops.sequencer.select(extend=False, linked_handle=False, left_right='NONE', linked_time=False)
+        #Right
+        row = col.row(align=True)
+        row.label(text="Select Strips:")
+        
+        row = col.row(align=True)
+        button = row.operator("sequencer.select", text="Right", icon="BACK")
+        button.extend = False
+        button.linked_handle = False
+        button.linked_time = False
+        button.left_right = "LEFT"
+        
+        button = row.operator("sequencer.select", text="Left", icon="FORWARD")
+        button.extend = False
+        button.linked_handle = False
+        button.linked_time = False
+        button.left_right = "RIGHT"
         
         #Markers
         row = col.row(align=True)
         row.label(text="Markers:")
-        row = col.row(align=True)
-        row.operator("screen.marker_jump", text="Previous", icon="TRIA_LEFT").next = False
-        row.operator("screen.marker_jump", text="Next", icon="TRIA_RIGHT").next = True
         
         row = col.row(align=True)
-        button = row.operator("screen.marker_ops", text="Select Current Frame", icon="MARKER_HLT")
+        button = row.operator("sequencer_tools.marker_ops", text="", icon="ADD")
+        button.type = "move"
+        button.sub = "add"
+        button = row.operator("sequencer_tools.marker_ops", text="", icon="REMOVE")
+        button.type = "move"
+        button.sub = "sub"
+        row.prop(props, "MarkerInt", text="Marker")
+        
+        #Scale Markers
+        row = col.row(align=True)
+        button = row.operator("sequencer_tools.marker_ops", text="", icon="FULLSCREEN_ENTER")
+        button.type = "scale"
+        
+        row.prop(props, "MarkerScale", text="Scale")
+        
+        
+        row = col.row(align=True)
+        button = row.operator("screen.marker_jump", text="Previous", icon="TRIA_LEFT")
+        #row.operator("sequencer_tools.marker_jump", text="Previous", icon="TRIA_LEFT").next = False
+        #row.operator("sequencer_tools.marker_jump", text="Previous", icon="TRIA_LEFT")
+        button.next = False
+
+        button = row.operator("screen.marker_jump", text="Next", icon="TRIA_RIGHT")
+        button.next = True
+        
+        #Active
+        """row = col.row(align=True)
+        button = row.operator("sequencer_tools.marker_ops", text="Next", icon="TRIA_RIGHT")
+        button.type = "active"
+        button.sub = "next" """
+        #button = row.operator("sequencer_tools.marker_ops", text="Previous", icon="REMOVE")
+        #button.type = "active"
+        #button.sub = "previous"
+        
+        #Select
+        row = col.row(align=True)
+        button = row.operator("sequencer_tools.marker_ops", text="Select Current Frame", icon="MARKER_HLT")
         button.type = "select"
         button.sub = "currentFrame"
         
         row = col.row(align=True)
-        button = row.operator("screen.marker_ops", text="Select All", icon="MARKER_HLT")
+        button = row.operator("sequencer_tools.marker_ops", text="Select All", icon="MARKER_HLT")
         button.type = "select"
         button.sub = "all"
         
         #row = col.row(align=True)
-        button = row.operator("screen.marker_ops", text="Unselect All", icon="MARKER")
+        button = row.operator("sequencer_tools.marker_ops", text="Unselect All", icon="MARKER")
         button.type = "deselect"
         button.sub = "all"
         
         row = col.row(align=True)
-        button = row.operator("screen.marker_to_current", text="Marker To Current", icon="MARKER_HLT")
+        button = row.operator("sequencer_tools.marker_to_current", text="Marker To Current", icon="MARKER_HLT")
         
-        #End of CustomPanel1
+        #End of SEQUENCER_TOOLS_PT_custom_panel11
 
-# Register        
-def register():  
-    ut = bpy.utils
+classes = (
+    SEQUENCER_TOOLS_PT_custom_panel1,
+    SEQUENCER_TOOLS_OT_strip_ops,
+    SEQUENCER_TOOLS_OT_marker_ops,
+    SEQUENCER_TOOLS_OT_marker_to_current,
+    SEQUENCER_TOOLS_OT_timeline_add,
+    #initSceneProperties,
+
+    SEQUENCER_TOOLS_props,
+)
+
+"""
+def register():
+    #ut = bpy.utils
+    for cls in classes:
+        bpy.utils.register_class(cls)
+        
+    bpy.types.Scene.SeqTools_Props = bpy.props.PointerProperty(type=SEQUENCER_TOOLS_props)
     
-    ut.register_class(CustomPanel)
-    ut.register_class(StripOperators)
-    ut.register_class(MarkerOperators)
-    ut.register_class(MarkerToCurrent)
-    ut.register_class(timelineAdd)
-    #Note: register_manual_map isn't needed for an AddOn
-    ut.register_manual_map(initSceneProperties)
-    
-    #Registers CollectionProperty in the Scene
-    #ut.register_class(SelectListClass)
-    #bpy.types.Scene.selectList = bpy.props.CollectionProperty(type=SelectListClass)
 def unregister():
-    ut = bpy.utils
+    #ut = bpy.utils
+    #from bpy.utils import unregister_class
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)
+
+    #Just incase to prevent an error
+    if hasattr(bpy.types.Scene, "SeqTools_Props") == True:
+        del bpy.types.Scene.SeqTools_Props
     
-    ut.unregister_class(CustomPanel)
-    ut.unregister_class(StripOperators)
-    ut.unregister_class(MarkerOperators)
-    ut.unregister_class(MarkerToCurrent)
-    ut.unregister_class(timelineAdd)
-    #Note: register_manual_map isn't needed for an AddOn
-    ut.unregister_manual_map(initSceneProperties)
-    
-    #Unregister CollectionProperty
-    #ut.unregister_class(SelectListClass)
-    #del bpy.types.Scene.selectList
-    
+#register, unregister = bpy.utils.register_classes_factory(classes)
 if __name__ == "__main__":
     register()
+
+"""

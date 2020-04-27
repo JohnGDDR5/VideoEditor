@@ -18,19 +18,6 @@
 #
 # ##### END GPL LICENSE BLOCK #####
 
-"""
-bl_info = {
-    "name": "Video Editor Script Tools",
-    "description": "Simple strip tools for Blender",
-    "author": "JohnGDDR5 (Juan Cardenas)",
-    "version": (1, 0, 0), 
-    "blender": (2, 80, 0),
-    "location": "View3D > Tools > Rig",
-    "warning": "Currently in development. Porting to Blender 2.8",
-    "support": "COMMUNITY",
-    "category": "Sequencer Video Editing"
-}
-"""
 
 import bpy
         
@@ -58,11 +45,166 @@ class SEQUENCER_TOOLS_props(bpy.types.PropertyGroup):
     
     # END
 
+class StripBlock():
+    count = 0
+    
+    def __init__(self):
+        self.strips = []
+        self.start = 0
+        self.end = 0
+        
+        type(self).count += 1
+        #print("Intialized: " + str(class_type) + "Count: " + str(class_type.count) )
+        
+    def __del__(self):
+        type(self).count -= 1
+        #print("Deleted: " + str(class_type) + "Count: " + str(class_type.count) )
+
+    def length(self):
+        return len(self.strips)
+
+    def append(self, object):
+        self.strips.append(object )
+
+    def update_range(self, strip_ob=None):
+        #Object should be a Strip that uses
+        #.frame_final_start and .frame_final_end
+        def calculating(strip_ob):
+            if self.start != 0 and self.end != 0:
+                if strip_ob.frame_final_start < self.start:
+                    self.start = strip_ob.frame_final_start
+
+                if strip_ob.frame_final_end > self.end:
+                    self.end = strip_ob.frame_final_end
+            else:
+                self.start = strip_ob.frame_final_start
+                self.end = strip_ob.frame_final_end
+        #print("strip_ob: " + str(strip_ob) )
+        #print("self.length(): " + str(self.length() ) )
+        if strip_ob != None:
+            #if self.length() > 0:
+            calculating(strip_ob)
+        else:
+            if self.length() > 0:
+                #strip_ob = self.strips[-1]
+                calculating(self.strips[-1] )
+            else:
+                pass
+
+    def is_between_range(self, strip_ob):
+        is_between = False
+
+        if self.start <= strip_ob.frame_final_start:
+            if self.end >= strip_ob.frame_final_start:
+                #is_between = True
+                return True
+
+        if self.end >= strip_ob.frame_final_end:
+            if self.start <= strip_ob.frame_final_end:
+                #is_between = True
+                return True
+        #is_between = self.start <= strip_ob.frame_final_start and self.end >= strip_ob.frame_final_end
+        return False
+
+class SEQUENCER_TOOLS_OT_move_strips(bpy.types.Operator):
+    """Operators for moving Strips on Sequence Editor"""
+    bl_idname = "sequencer_tools.move_strips"
+    bl_label = "Move selected Strips in Sequence Editor"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    type: bpy.props.StringProperty(default="default")
+    sub: bpy.props.StringProperty(default="default")
+    #line = bpy.props.IntProperty(default=1, min=1)
+    
+    #Makes sure there is at least 1 strip selected in sequence editor
+    @classmethod
+    def poll(cls, context):
+        #return bpy.context.screen.scene.sequence_editor.active_strip is not None
+        #return bpy.context.scene.sequence_editor.active_strip is not None
+        return True
+    
+    def execute(self, context):
+        
+        scene = bpy.context.scene
+        data = bpy.data
+        
+        props = scene.SeqTools_Props
+
+        sequence_editor = scene.sequence_editor
+        
+        selected_strips = [strip for strip in sequence_editor.sequences if strip.select]
+
+        print(str(selected_strips) )
+        if len(selected_strips) > 0:
+            
+            if len(selected_strips) > 1:
+
+                first = StripBlock()
+                #first.update_range(selected_strips[0] )
+                first.append(selected_strips[0] )
+                first.update_range()
+
+                selected_strips.remove(selected_strips[0] )
+
+                strip_blocks = []
+                strip_blocks.append(first )
+                
+                ## 2nd
+                for strip in selected_strips:
+                    strip_start = strip.frame_final_start
+                    strip_end = strip.frame_final_end
+                    ## 1st
+                    for block in strip_blocks:
+                        
+                        if strip_start >= block.start:
+                            if block.end >= strip_start:
+                                if strip_end > block.end:
+                                    block.append(strip )
+                                    block.update_range()
+                                else:
+                                    block.append(strip )
+                            else:
+                                block_new = None
+
+                                #Checks if strip is between an existing block, to not create a new one
+                                for j in strip_blocks:
+                                    if j.is_between_range(strip ):
+                                        block_new = j
+                                        j.append(strip )
+                                        j.update_range()
+
+                                        #strip_blocks.append(block_new )
+                                        break
+                                #Creates a new StripBlock if strip wasn't between any existing ones 
+                                if block_new == None:
+                                    block_new = StripBlock()
+                                    block_new.append(strip )
+                                    block_new.update_range()
+
+                                    strip_blocks.append(block_new )
+
+                                break
+                
+                for i in enumerate(strip_blocks):
+                    print("%d: [%d, %d], count: %d" % (i[0], i[1].start, i[1].end, i[1].length()) )
+                                
+
+            else:
+                print("Only 1 Strip Selected")
+        else:
+            print("No Strips Selected")
+            
+        self.type = "default"
+        self.sub = "default"
+        
+        return {'FINISHED'}        
+
 class SEQUENCER_TOOLS_OT_strip_ops(bpy.types.Operator):
     """Operators for  Strips on Sequence Editor"""
     bl_idname = "sequencer_tools.strip_ops"
     bl_label = "Simple Object Operator"
     bl_options = {'REGISTER', 'UNDO'}
+
     type: bpy.props.StringProperty(default="default")
     sub: bpy.props.StringProperty(default="default")
     #line = bpy.props.IntProperty(default=1, min=1)
@@ -198,34 +340,6 @@ class SEQUENCER_TOOLS_OT_strip_ops(bpy.types.Operator):
                             if i[1].frame > currentF:
                                 if i[1].select == True:
                                     i[1].frame -= sub
-            """if self.sub == "all":
-                pass"""
-            #pass
-            """elif self.sub == "afterCurrentActive":
-                #Checks if there is at least an active strip
-                if sequence_editor.active_strip is not None:
-                    active = sequence_editor.active_strip
-                    
-                    list = []
-                    
-                    for i in enumerate(sequence_editor.sequences_all):
-                        if i[1].frame_final_start > frameC and i[1].select == True:
-                            list.append(i[0])
-                        else:
-                            pass
-                    #Gets the minimum index appended to "list" variable
-                    minimum = int(min(list))
-                    #The ammount to subtract for every strip on the left of the current frame
-                    sub = sequence_editor.sequences_all[minimum].frame_final_start-frameC
-                    
-                    for i in enumerate(sequence_editor.sequences_all):
-                        if i[1].frame_final_start > frameC:
-                            channel = i[1].channel
-                            i[1].frame_start -= sub#(i[1].frame_final_start-frameC)
-                            i[1].channel = channel
-                        else:
-                            pass
-                pass"""
         else:
             print("Unrecognized .strip_ops's Type & Sub")
             
@@ -326,54 +440,7 @@ class SEQUENCER_TOOLS_OT_marker_ops(bpy.types.Operator):
             if self.sub == "next":
                 #Checks if there is at least 1 marker
                 if len(markers) > 0:
-                    #1st try
-                    """
-                    markerIndex = 0
-                    #Selects Next Marker
-                    for i in enumerate(markers):
-                        if i[1].select == True:
-                            markerIndex = i[0]
-                            break
-                        elif i[0] == len(markers)-1:
-                            pass
                     
-                    #Deselects all markers
-                    for i in markers:
-                        i.select = False
-                    
-                    #Selects Next Marker
-                    if markerIndex != len(markers)-1:
-                        markers[markerIndex+1].select = True
-                    else:
-                        markers[0].select = True
-                    #break"""
-                    #2nd try
-                    """
-                    markerIndex = 0
-                    #indexList = []
-                    #Appends all selected marker frames to frameList
-                    frameList = []
-                    for i in enumerate(markers):
-                        if i[1].select == True:
-                            #indexList.append(i[0])
-                            frameList.append(i[1].frame)
-                    #Finds minimum frame to find the index 
-                    minimum = min(frameList)
-                    
-                    #Deselects all markers
-                    for i in markers:
-                        i.select = False
-                    #Find which marker is at the minimum frame
-                    for i in enumerate(markers):
-                        if i[1].frame == minimum:
-                            #Doesn't work since indexes aren't in range
-                            markers[i[0]+1].select = True
-                            #markerIndex = i[0]
-                            break
-                        elif i[0] == len(markers)-1:
-                            #markers[0].select = True
-                            pass
-                    """
                     markerIndex = 0
                     indexList = []
                     #Appends all selected marker frames to frameList
@@ -391,17 +458,8 @@ class SEQUENCER_TOOLS_OT_marker_ops(bpy.types.Operator):
                     
                     #Deselects all markers
                     for i in markers:
-                        i.select = False
-                    #Find which marker is at the minimum frame
-                    """for i in enumerate(markers):
-                        if i[1].frame == minimum:
-                            #Doesn't work since indexes aren't in range
-                            markers[i[0]+1].select = True
-                            #markerIndex = i[0]
-                            break
-                        elif i[0] == len(markers)-1:
-                            #markers[0].select = True
-                            pass"""
+                        strip.select = False
+
                     #Find which marker is at the minimum frame
                     for i in indexList:
                         print("I: "+str(i))
@@ -469,13 +527,13 @@ class SEQUENCER_TOOLS_OT_marker_to_current(bpy.types.Operator):
             for j, i in enumerate(scene.timeline_markers):
                 
                 #Checks if a marker is selected
-                if i.select == True:
-                    print(str(i.name)+": "+str(i.frame) +" "+ str(i.select))
+                if strip.select == True:
+                    print(str(strip.name)+": "+str(strip.frame) +" "+ str(strip.select))
                     #Gets the distance of the selected marker to current frame
-                    distance = i.frame - currentF
-                    list.append([i.name, distance, i.select, j])
+                    distance = strip.frame - currentF
+                    list.append([strip.name, distance, strip.select, j])
                     
-                    if i.frame >= currentF:
+                    if strip.frame >= currentF:
                         break
             
             #Checks if there is more than one selected marker
@@ -507,8 +565,10 @@ class SEQUENCER_TOOLS_OT_timeline_add(bpy.types.Operator):
     """Adds frame number set of Frameint"""
     bl_idname = "time.timeline_add"
     bl_label = "Simple Object Operator"
-    type: bpy.props.StringProperty(default="add")
     bl_options = {'REGISTER', 'UNDO'}
+
+    type: bpy.props.StringProperty(default="add")
+    
     #timeline = bpy.props.StringProperty(default="start")
 
     def execute(self, context):
@@ -554,10 +614,10 @@ class PanelGroups(bpy.types.PropertyGroup):
 class SEQUENCER_TOOLS_PT_custom_panel1(bpy.types.Panel):
     #A Custom Panel in Viewport
     bl_idname = "SEQUENCER_TOOLS_PT_custom_panel1"
-    bl_label = "Strip Edit"
+    bl_label = "Strip Tools"
     bl_space_type = 'SEQUENCE_EDITOR'
     bl_region_type = 'UI'
-    bl_category = "Edit Video"
+    bl_category = "Strip Tools"
     
     # draw function
     def draw(self, context):
@@ -576,6 +636,9 @@ class SEQUENCER_TOOLS_PT_custom_panel1(bpy.types.Panel):
         sequence_editor = scene.sequence_editor
         
         col = layout.column()
+
+        row = col.row(align=True)
+        row.operator("sequencer_tools.move_strips", text="Remove Spaces", icon="ADD")
 
         row = col.row(align=True)
         row.label(text="Frame")
@@ -719,6 +782,7 @@ class SEQUENCER_TOOLS_PT_custom_panel1(bpy.types.Panel):
 classes = (
     SEQUENCER_TOOLS_props,
     
+    SEQUENCER_TOOLS_OT_move_strips,
     SEQUENCER_TOOLS_OT_strip_ops,
     SEQUENCER_TOOLS_OT_marker_ops,
     SEQUENCER_TOOLS_OT_marker_to_current,

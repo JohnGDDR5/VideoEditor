@@ -19,27 +19,29 @@ from bpy.props import *
 
 #from . backup_objects_addon_b2_80_v1_0_1 import classes
 from . video_editor_script_v1_0 import (
-    SEQUENCER_TOOLS_PT_custom_panel1,
+    SEQUENCER_TOOLS_props,
+    
+    SEQUENCER_TOOLS_OT_move_strips,
     SEQUENCER_TOOLS_OT_strip_ops,
     SEQUENCER_TOOLS_OT_marker_ops,
     SEQUENCER_TOOLS_OT_marker_to_current,
     SEQUENCER_TOOLS_OT_timeline_add,
-    #initSceneProperties,
 
-    SEQUENCER_TOOLS_props,
+    SEQUENCER_TOOLS_PT_custom_panel1,
 )
 
 #print("classes"+str(classes) )
 #Yes, I had to do this or else it would not register correctly
 classes = (
-    SEQUENCER_TOOLS_PT_custom_panel1,
+    SEQUENCER_TOOLS_props,
+    
+    SEQUENCER_TOOLS_OT_move_strips,
     SEQUENCER_TOOLS_OT_strip_ops,
     SEQUENCER_TOOLS_OT_marker_ops,
     SEQUENCER_TOOLS_OT_marker_to_current,
     SEQUENCER_TOOLS_OT_timeline_add,
-    #initSceneProperties,
 
-    SEQUENCER_TOOLS_props,
+    SEQUENCER_TOOLS_PT_custom_panel1,
 )
 
 def register():

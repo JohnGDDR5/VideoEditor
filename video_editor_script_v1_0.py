@@ -40,6 +40,24 @@ from mathutils import Matrix, Vector, Euler
 
 from operator import itemgetter, attrgetter
 
+class SEQUENCER_TOOLS_props(bpy.types.PropertyGroup):
+    #collections for custom Property Groups
+    toggle_layer: BoolProperty(name="Boolean", description="Shadow Samples Toggle Button", default=False)
+    
+    toggle_layers_scene: BoolVectorProperty(name="Boolean", description="Booleans if bone layers are on/off", size=32, default=([False]*32))
+    
+    toggle_2nd_add_frames: BoolProperty(name="Boolean", description="Booleans if bone layers are on/off", default=False)
+    
+    add_frames: IntVectorProperty(name="IntVector", description="Add or Sub Current Frame", default= (24, 24) , min=0, size=2)
+    
+    marker_scale: FloatProperty(name="Float", description="Scale location of selected markers", default= 24.0, min=0.0, soft_min=0.0, soft_max=5.0)
+    
+    markers_include: BoolProperty(name="Boolean", description="If you want to include markers when moving with screen.strip_ops", default=False)
+    
+    add_frames_marker: IntProperty(name="Int", description="Add or Sub Current Frame selected markers", default= 24, min=0)
+    
+    # END
+
 class SEQUENCER_TOOLS_OT_strip_ops(bpy.types.Operator):
     """Operators for  Strips on Sequence Editor"""
     bl_idname = "sequencer_tools.strip_ops"
@@ -531,24 +549,6 @@ class PanelGroups(bpy.types.PropertyGroup):
     panelArmatures = bpy.props.CollectionProperty(type=PanelGroupArmatures)"""
 
 
-class SEQUENCER_TOOLS_props(bpy.types.PropertyGroup):
-    #collections for custom Property Groups
-    toggle_layer: BoolProperty(name="Boolean", description="Shadow Samples Toggle Button", default=False)
-    
-    toggle_layers_scene: BoolVectorProperty(name="Boolean", description="Booleans if bone layers are on/off", size=32, default=([False]*32))
-    
-    toggle_2nd_add_frames: BoolProperty(name="Boolean", description="Booleans if bone layers are on/off", default=False)
-    
-    add_frames: IntVectorProperty(name="IntVector", description="Add or Sub Current Frame", default= (24, 24) , min=0, size=2)
-    
-    marker_scale: FloatProperty(name="Float", description="Scale location of selected markers", default= 24.0, min=0.0, soft_min=0.0, soft_max=5.0)
-    
-    markers_include: BoolProperty(name="Boolean", description="If you want to include markers when moving with screen.strip_ops", default=False)
-    
-    add_frames_marker: IntProperty(name="Int", description="Add or Sub Current Frame selected markers", default= 24, min=0)
-    
-    # END
-
 # Menu UI Panel __________________________________________________
 
 class SEQUENCER_TOOLS_PT_custom_panel1(bpy.types.Panel):
@@ -565,7 +565,7 @@ class SEQUENCER_TOOLS_PT_custom_panel1(bpy.types.Panel):
         layout = self.layout
         
         scene = bpy.context.scene
-        screen = bpy.context.screen
+        #screen = bpy.context.screen
         
         props = scene.SeqTools_Props
         
@@ -574,31 +574,9 @@ class SEQUENCER_TOOLS_PT_custom_panel1(bpy.types.Panel):
 
         #sequence_editor = screen.scene.sequence_editor
         sequence_editor = scene.sequence_editor
-        currentF = scene.frame_current
         
         col = layout.column()
-        #Current Frame
-        #row = col.row(align=True)
-        #row.label(text="Current Frame:")
-        
-        """
-        row = col.row(align=True)
-        #if screen.scene.sequence_editor.active_strip is not None:
-        if scene.sequence_editor.active_strip is not None:
-            active_strip = sequence_editor.active_strip
-            
-            row.label(text="Strip Frames: "+str(active_strip.frame_final_duration))
-            row = col.row(align=True)
-            row.label(text="Start Frame: "+str(active_strip.frame_final_start))
-            row = col.row(align=True)
-            row.label(text="Current Frame Dif: "+str(active_strip.frame_final_start-currentF))
-        else:
-            row.label(text="Strip Frames: No Active Strip")
-            row = col.row(align=True)
-            row.label(text="Start Frame: No Active Strip")
-            row = col.row(align=True)
-            row.label(text="Current Frame Dif: No Active Strip")
-        """
+
         row = col.row(align=True)
         row.label(text="Frame")
 
@@ -689,9 +667,11 @@ class SEQUENCER_TOOLS_PT_custom_panel1(bpy.types.Panel):
         button = row.operator("sequencer_tools.marker_ops", text="", icon="ADD")
         button.type = "move"
         button.sub = "add"
+
         button = row.operator("sequencer_tools.marker_ops", text="", icon="REMOVE")
         button.type = "move"
         button.sub = "sub"
+
         row.prop(props, "add_frames_marker", text="Frames")
         
         #Scale Markers
@@ -706,22 +686,12 @@ class SEQUENCER_TOOLS_PT_custom_panel1(bpy.types.Panel):
 
         row = col.row(align=True)
         button = row.operator("screen.marker_jump", text="Previous", icon="TRIA_LEFT")
-        #row.operator("sequencer_tools.marker_jump", text="Previous", icon="TRIA_LEFT").next = False
-        #row.operator("sequencer_tools.marker_jump", text="Previous", icon="TRIA_LEFT")
         button.next = False
 
         button = row.operator("screen.marker_jump", text="Next", icon="TRIA_RIGHT")
         button.next = True
         
-        #Active
-        """row = col.row(align=True)
-        button = row.operator("sequencer_tools.marker_ops", text="Next", icon="TRIA_RIGHT")
-        button.type = "active"
-        button.sub = "next" """
-        #button = row.operator("sequencer_tools.marker_ops", text="Previous", icon="REMOVE")
-        #button.type = "active"
-        #button.sub = "previous"
-        
+
         row = col.row(align=True)
         row.label(text="Select Markers")
 
@@ -747,36 +717,13 @@ class SEQUENCER_TOOLS_PT_custom_panel1(bpy.types.Panel):
         #End of SEQUENCER_TOOLS_PT_custom_panel11
 
 classes = (
-    SEQUENCER_TOOLS_PT_custom_panel1,
+    SEQUENCER_TOOLS_props,
+    
     SEQUENCER_TOOLS_OT_strip_ops,
     SEQUENCER_TOOLS_OT_marker_ops,
     SEQUENCER_TOOLS_OT_marker_to_current,
     SEQUENCER_TOOLS_OT_timeline_add,
-    #initSceneProperties,
 
-    SEQUENCER_TOOLS_props,
+    SEQUENCER_TOOLS_PT_custom_panel1,
 )
 
-"""
-def register():
-    #ut = bpy.utils
-    for cls in classes:
-        bpy.utils.register_class(cls)
-        
-    bpy.types.Scene.SeqTools_Props = bpy.props.PointerProperty(type=SEQUENCER_TOOLS_props)
-    
-def unregister():
-    #ut = bpy.utils
-    #from bpy.utils import unregister_class
-    for cls in reversed(classes):
-        bpy.utils.unregister_class(cls)
-
-    #Just incase to prevent an error
-    if hasattr(bpy.types.Scene, "SeqTools_Props") == True:
-        del bpy.types.Scene.SeqTools_Props
-    
-#register, unregister = bpy.utils.register_classes_factory(classes)
-if __name__ == "__main__":
-    register()
-
-"""

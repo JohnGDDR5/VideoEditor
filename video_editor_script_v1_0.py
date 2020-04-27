@@ -54,11 +54,9 @@ class StripBlock():
         self.end = 0
         
         type(self).count += 1
-        #print("Intialized: " + str(class_type) + "Count: " + str(class_type.count) )
         
     def __del__(self):
         type(self).count -= 1
-        #print("Deleted: " + str(class_type) + "Count: " + str(class_type.count) )
 
     def length(self):
         return len(self.strips)
@@ -66,9 +64,13 @@ class StripBlock():
     def append(self, object):
         self.strips.append(object )
 
+    def extend(self, object):
+        self.strips.extend(object )
+
+    #Takes a parameter, if not, then it will use last object inside self.strips
     def update_range(self, strip_ob=None):
         #Object should be a Strip that uses
-        #.frame_final_start and .frame_final_end
+        #this function is to reuse code
         def calculating(strip_ob):
             if self.start != 0 and self.end != 0:
                 if strip_ob.frame_final_start < self.start:
@@ -79,18 +81,15 @@ class StripBlock():
             else:
                 self.start = strip_ob.frame_final_start
                 self.end = strip_ob.frame_final_end
-        #print("strip_ob: " + str(strip_ob) )
-        #print("self.length(): " + str(self.length() ) )
+
         if strip_ob != None:
-            #if self.length() > 0:
             calculating(strip_ob)
         else:
             if self.length() > 0:
-                #strip_ob = self.strips[-1]
                 calculating(self.strips[-1] )
             else:
                 pass
-
+    # Checks if Strips are ontop of the block, if it overlaps it.
     def is_between_range(self, strip_ob):
         is_between = False
 
@@ -105,6 +104,10 @@ class StripBlock():
                 return True
         #is_between = self.start <= strip_ob.frame_final_start and self.end >= strip_ob.frame_final_end
         return False
+
+    def sort_strips(self):
+        #Sorts the strips in order
+        self.strips.sort(key=lambda strip: strip.frame_final_start)
 
 class SEQUENCER_TOOLS_OT_move_strips(bpy.types.Operator):
     """Operators for moving Strips on Sequence Editor"""
@@ -185,9 +188,29 @@ class SEQUENCER_TOOLS_OT_move_strips(bpy.types.Operator):
 
                                 break
                 
+                #Sorts the blocks in order
+                strip_blocks.sort(key=lambda block: block.end)
+
                 for i in enumerate(strip_blocks):
                     print("%d: [%d, %d], count: %d" % (i[0], i[1].start, i[1].end, i[1].length()) )
-                                
+                
+                ## This merges strip_blocks together if they are touching each other
+                previous = strip_blocks[0]
+
+                for i in strip_blocks[1:]:
+                    if i.start == previous.end:
+                        previous.extend(i.strips )
+                        
+                        previous.end = i.end
+
+                        strip_blocks.remove(i )
+                    else:
+                        previous = i
+
+                for i in enumerate(strip_blocks):
+                    print("%d: [%d, %d], count: %d" % (i[0], i[1].start, i[1].end, i[1].length()) )
+
+                ## Now I just need to sort the strips inside the strip blocks.
 
             else:
                 print("Only 1 Strip Selected")

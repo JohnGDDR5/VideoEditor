@@ -28,3 +28,12 @@ bpy.context.scene.sequence_editor.active_strip.frame_final_start
 ## End
 bpy.context.scene.sequence_editor.active_strip.frame_final_end
 603
+
+## Using sort() Example from https://realpython.com/python-sort/
+>>> word = 'paper'
+>>> len(word)
+5
+>>> words = ['banana', 'pie', 'Washington', 'book']
+>>> sorted(words, key=len)
+['pie', 'book', 'banana', 'Washington']
+

@@ -35,5 +35,8 @@ bpy.context.scene.sequence_editor.active_strip.frame_final_end
 5
 >>> words = ['banana', 'pie', 'Washington', 'book']
 >>> sorted(words, key=len)
-['pie', 'book', 'banana', 'Washington']
+Returns ['pie', 'book', 'banana', 'Washington']
+
+
+## 
 

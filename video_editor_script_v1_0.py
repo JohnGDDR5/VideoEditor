@@ -137,20 +137,21 @@ class SEQUENCER_TOOLS_OT_move_strips(bpy.types.Operator):
         
         selected_strips = [strip for strip in sequence_editor.sequences if strip.select]
 
+        #Sorts the selected_strips in order, which speeds up calculating everything in the operator, as there is no need to merge Blocks that overlap together
+        selected_strips.sort(key=lambda strip: strip.frame_final_start )
+
         print(str(selected_strips) )
         if len(selected_strips) > 0:
             
             if len(selected_strips) > 1:
 
                 first = StripBlock()
-                #first.update_range(selected_strips[0] )
                 first.append(selected_strips[0] )
                 first.update_range()
 
                 selected_strips.remove(selected_strips[0] )
 
-                strip_blocks = []
-                strip_blocks.append(first )
+                strip_blocks = [first]
                 
                 ## 2nd
                 for strip in selected_strips:
@@ -189,28 +190,43 @@ class SEQUENCER_TOOLS_OT_move_strips(bpy.types.Operator):
                                 break
                 
                 #Sorts the blocks in order
-                strip_blocks.sort(key=lambda block: block.end)
-
-                for i in enumerate(strip_blocks):
-                    print("%d: [%d, %d], count: %d" % (i[0], i[1].start, i[1].end, i[1].length()) )
+                strip_blocks.sort(key=lambda block: block.end )
                 
-                ## This merges strip_blocks together if they are touching each other
-                previous = strip_blocks[0]
+                # prints the block info of generated blocks
+                def printBlocks(strip_blocks ):
+                    for i in enumerate(strip_blocks):
+                        print("%d: [%d, %d], count: %d" % (i[0], i[1].start, i[1].end, i[1].length()) )
+                
+                # This function isn't used, but just incase it is needed later, keep it until then.
+                def mergeOverlappingBlocks():
+                    ## This merges strip_blocks together if they are touching each other
+                    previous = strip_blocks[0]
 
-                for i in strip_blocks[1:]:
-                    if i.start == previous.end:
-                        previous.extend(i.strips )
-                        
-                        previous.end = i.end
+                    for i in strip_blocks[1:]:
+                        if i.start == previous.end:
+                            previous.extend(i.strips )
+                            
+                            previous.end = i.end
 
-                        strip_blocks.remove(i )
-                    else:
-                        previous = i
-
-                for i in enumerate(strip_blocks):
-                    print("%d: [%d, %d], count: %d" % (i[0], i[1].start, i[1].end, i[1].length()) )
+                            strip_blocks.remove(i )
+                        else:
+                            previous = i
 
                 ## Now I just need to sort the strips inside the strip blocks.
+                previous = strip_blocks[0]
+
+                frame_gap = 0
+
+                for i in strip_blocks[1:]:
+
+                    frame_gap = (i.start - previous.end) + frame_gap
+
+                    for j in i.strips:
+                        ## A "Transform" strip is bound to the frame_start and end of a strip, it can't be manually moved
+                        if j.type != 'TRANSFORM':
+                            j.frame_start -= frame_gap
+
+                    previous = i
 
             else:
                 print("Only 1 Strip Selected")
